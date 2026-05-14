@@ -3,3 +3,6 @@
 export(create_landlord)
 export(create_resident)
 export(get_n_resident)
+export(initial_random_allocation)
+export(neighbor_indices)
+export(same_block_indices)

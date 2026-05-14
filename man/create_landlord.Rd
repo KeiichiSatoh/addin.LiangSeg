@@ -7,7 +7,7 @@
 create_landlord(
   city,
   n_landlord = 5,
-  ethnic_aversion = c(1, 1, 1, 0, 0),
+  minority_aversion = c(1, 1, 1, 0, 0),
   SES_aversion = c(0, 0, 1, 1, 1),
   dispersed_landlord = c(1, 1, 1, 0, 0),
   geo_difference = FALSE,
@@ -24,7 +24,7 @@ receive no owner.}
 \item{n_landlord}{A positive integer giving the number of landlords to
 create. Default is \code{5}.}
 
-\item{ethnic_aversion}{A non-negative numeric vector of length
+\item{minority_aversion}{A non-negative numeric vector of length
 \code{n_landlord} representing each landlord's aversion to ethnic
 diversity (or similar ethnicity-based preference). The interpretation
 is application-specific; higher values typically indicate stronger
@@ -62,7 +62,7 @@ Only used when \code{geo_difference = TRUE}.}
 \value{
 A list with two elements:
 \describe{
-\item{\code{landlord}}{A data frame with columns \code{ID}, \code{ethnic_aversion},
+\item{\code{landlord}}{A data frame with columns \code{ID}, \code{minority_aversion},
 \code{SES_aversion}, and \code{dispersed}, one row per landlord.}
 \item{\code{ownership}}{A 3D integer array with the same dimensions as
 \code{city}. Each non-NA cell contains the ID of the landlord that
@@ -98,13 +98,13 @@ city <- create_city(zone_dim = c(2, 2), lot_dim = c(3, 3), max_height = 2)
 
 # Uniform random ownership
 result1 <- create_landlord(city, n_landlord = 3,
-                           ethnic_aversion = c(1, 0, 0),
+                           minority_aversion = c(1, 0, 0),
                            SES_aversion    = c(0, 1, 0),
                            dispersed_landlord = c(0, 0, 0))
 
 # Geographically clustered ownership with two dispersed landlords
 result2 <- create_landlord(city, n_landlord = 5,
-                           ethnic_aversion = c(1, 1, 1, 0, 0),
+                           minority_aversion = c(1, 1, 1, 0, 0),
                            SES_aversion    = c(0, 0, 1, 1, 1),
                            dispersed_landlord = c(0, 0, 0, 1, 1),
                            geo_difference = TRUE,

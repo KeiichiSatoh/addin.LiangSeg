@@ -12,13 +12,13 @@
 #'   target proportion of minority residents. Minority status is assigned
 #'   by sampling from `rABM::make_group_labels()` using this proportion.
 #'   Default is `0.4`.
-#' @param preference_ethnicity A numeric vector of length `n_resident` with
-#'   values in `[0, 1]` giving each resident's preference weight for ethnic
+#' @param preference_ethnicity A numeric vector of length `n_resident`,
+#' giving each resident's preference weight for ethnic
 #'   similarity in neighbors. Default is `0.5` for all residents.
 #' @param SES A numeric vector of length `n_resident` giving each
-#'   resident's socioeconomic status. Must be non-negative.
-#' @param preference_SES A numeric vector of length `n_resident` with
-#'   values in `[0, 1]` giving each resident's preference weight for SES
+#'   resident's socioeconomic status. Must be between 0 and 5.
+#' @param preference_SES A numeric vector of length `n_resident`,
+#'  giving each resident's preference weight for SES
 #'   similarity in neighbors. Default is `0.5` for all residents.
 #'
 #' @return A data frame with `n_resident` rows and the following columns:
@@ -68,7 +68,8 @@ create_resident <- function(
     minority_prop = 0.4,
     preference_ethnicity = rep(0.5, n_resident),
     SES = c(1, 1, 2, 2, 3, 3, 4, 4, 5, 5),
-    preference_SES = rep(0.5, n_resident)
+    preference_SES = rep(0.5, n_resident),
+    preference_intercept = rep(1, n_resident)
 ) {
   # validation
   if (!is.numeric(n_resident) || n_resident <= 0 || n_resident != as.integer(n_resident)) {
@@ -83,9 +84,6 @@ create_resident <- function(
   if (length(preference_ethnicity) != n_resident) {
     stop("The length of 'preference_ethnicity' must be 'n_resident'.")
   }
-  if (any(preference_ethnicity < 0 | preference_ethnicity > 1)) {
-    stop("'preference_ethnicity' must be in [0, 1].")
-  }
   
   if (length(SES) != n_resident) {
     stop("The length of 'SES' must be 'n_resident'.")
@@ -93,12 +91,20 @@ create_resident <- function(
   if (any(SES < 0)) {
     stop("'SES' must be non-negative.")
   }
+  if(any(SES > 5)){
+    warning("Some agents have SES scores that are more than 5, which are truncated to 5.")
+    SES[SES > 5] <- 5
+  }
   
   if (length(preference_SES) != n_resident) {
     stop("The length of 'preference_SES' must be 'n_resident'.")
   }
-  if (any(preference_SES < 0 | preference_SES > 1)) {
-    stop("'preference_SES' must be in [0, 1].")
+  
+  if (length(preference_intercept) != n_resident) {
+    stop("The length of 'preference_intercept' must be 'n_resident'.")
+  }
+  if (any(preference_intercept < 0)) {
+    stop("'preference_intercept' must be greater than or equal to 0.")
   }
   
   # ethnicity
@@ -113,7 +119,9 @@ create_resident <- function(
     ID = seq_len(n_resident),
     minority = minority,
     SES = SES,
+    intercept = 1,
     preference_ethnicity = preference_ethnicity,
-    preference_SES = preference_SES
+    preference_SES = preference_SES,
+    preference_intercept = preference_intercept
   )
 }

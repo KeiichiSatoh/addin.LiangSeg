@@ -14,14 +14,14 @@
 #'   create. Default is `5`.
 #' @param minority_aversion A non-negative numeric vector of length
 #'   `n_landlord` representing each landlord's aversion to ethnic
-#'   diversity (or similar ethnicity-based preference). The interpretation
-#'   is application-specific; higher values typically indicate stronger
-#'   aversion. Default is `c(1, 1, 1, 0, 0)`.
+#'   minority. Higher values indicate stronger aversion. 
+#'   Default is `c(1, 1, 1, 0, 0)`.
 #' @param SES_aversion A non-negative numeric vector of length
 #'   `n_landlord` representing each landlord's aversion based on
 #'   socioeconomic status (SES). The interpretation is application-
 #'   specific; higher values typically indicate stronger aversion.
 #'   Default is `c(0, 0, 1, 1, 1)`.
+#' @param aversion_intercept A intercept for calculating the aversion score.
 #' @param dispersed_landlord An integer vector of length `n_landlord`
 #'   containing 0 or 1. A value of `1` marks the landlord as "dispersed",
 #'   meaning they own property uniformly across the city (rather than
@@ -45,7 +45,7 @@
 #' @return A list with two elements:
 #'   \describe{
 #'     \item{`landlord`}{A data frame with columns `ID`, `minority_aversion`,
-#'       `SES_aversion`, and `dispersed`, one row per landlord.}
+#'       `SES`, and `dispersed`, one row per landlord.}
 #'     \item{`ownership`}{A 3D integer array with the same dimensions as
 #'       `city`. Each non-NA cell contains the ID of the landlord that
 #'       owns it; cells that are NA in `city` are also NA here. Ownership
@@ -74,7 +74,7 @@
 #' # Uniform random ownership
 #' result1 <- create_landlord(city, n_landlord = 3,
 #'                            minority_aversion = c(1, 0, 0),
-#'                            SES_aversion    = c(0, 1, 0),
+#'                            SES    = c(0, 1, 0),
 #'                            dispersed_landlord = c(0, 0, 0))
 #'
 #' # Geographically clustered ownership with two dispersed landlords
@@ -94,6 +94,7 @@ create_landlord <- function(
     n_landlord = 5,
     minority_aversion = c(1, 1, 1, 0, 0),
     SES_aversion    = c(0, 0, 1, 1, 1),
+    intercept_aversion = rep(1, n_landlord),
     dispersed_landlord = c(1, 1, 1, 0, 0),
     geo_difference = FALSE,
     geo_lambda = 1,
@@ -123,6 +124,14 @@ create_landlord <- function(
     stop("The elements of 'SES_aversion' must be non-negative.")
   }
   
+  # intercept_aversion
+  if (length(intercept_aversion) != n_landlord) {
+    stop("The length of 'intercept_aversion' must be 'n_landlord'.")
+  }
+  if (any(intercept_aversion < 0)) {
+    stop("The elements of 'intercept_aversion' must be non-negative.")
+  }
+  
   # dispersed_landlord
   if (length(dispersed_landlord) != n_landlord) {
     stop("The length of 'dispersed_landlord' must be 'n_landlord'.")
@@ -138,6 +147,7 @@ create_landlord <- function(
     ID = seq_len(n_landlord),
     minority_aversion = minority_aversion,
     SES_aversion    = SES_aversion,
+    intercept_aversion = intercept_aversion,
     dispersed = dispersed_landlord
   )
   

@@ -9,6 +9,7 @@ create_landlord(
   n_landlord = 5,
   minority_aversion = c(1, 1, 1, 0, 0),
   SES_aversion = c(0, 0, 1, 1, 1),
+  intercept_aversion = rep(1, n_landlord),
   dispersed_landlord = c(1, 1, 1, 0, 0),
   geo_difference = FALSE,
   geo_lambda = 1,
@@ -26,9 +27,8 @@ create. Default is \code{5}.}
 
 \item{minority_aversion}{A non-negative numeric vector of length
 \code{n_landlord} representing each landlord's aversion to ethnic
-diversity (or similar ethnicity-based preference). The interpretation
-is application-specific; higher values typically indicate stronger
-aversion. Default is \code{c(1, 1, 1, 0, 0)}.}
+minority. Higher values indicate stronger aversion.
+Default is \code{c(1, 1, 1, 0, 0)}.}
 
 \item{SES_aversion}{A non-negative numeric vector of length
 \code{n_landlord} representing each landlord's aversion based on
@@ -58,12 +58,14 @@ first two dimensions of \code{city}) of each landlord's origin point.
 Must contain unique values within \code{1:prod(dim(city)[1:2])}. If \code{NULL}
 (the default), origins are sampled at random without replacement.
 Only used when \code{geo_difference = TRUE}.}
+
+\item{aversion_intercept}{A intercept for calculating the aversion score.}
 }
 \value{
 A list with two elements:
 \describe{
 \item{\code{landlord}}{A data frame with columns \code{ID}, \code{minority_aversion},
-\code{SES_aversion}, and \code{dispersed}, one row per landlord.}
+\code{SES}, and \code{dispersed}, one row per landlord.}
 \item{\code{ownership}}{A 3D integer array with the same dimensions as
 \code{city}. Each non-NA cell contains the ID of the landlord that
 owns it; cells that are NA in \code{city} are also NA here. Ownership
@@ -99,7 +101,7 @@ city <- create_city(zone_dim = c(2, 2), lot_dim = c(3, 3), max_height = 2)
 # Uniform random ownership
 result1 <- create_landlord(city, n_landlord = 3,
                            minority_aversion = c(1, 0, 0),
-                           SES_aversion    = c(0, 1, 0),
+                           SES    = c(0, 1, 0),
                            dispersed_landlord = c(0, 0, 0))
 
 # Geographically clustered ownership with two dispersed landlords

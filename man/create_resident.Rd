@@ -9,7 +9,8 @@ create_resident(
   minority_prop = 0.4,
   preference_ethnicity = rep(0.5, n_resident),
   SES = c(1, 1, 2, 2, 3, 3, 4, 4, 5, 5),
-  preference_SES = rep(0.5, n_resident)
+  preference_SES = rep(0.5, n_resident),
+  preference_intercept = rep(1, n_resident)
 )
 }
 \arguments{
@@ -21,15 +22,15 @@ target proportion of minority residents. Minority status is assigned
 by sampling from \code{rABM::make_group_labels()} using this proportion.
 Default is \code{0.4}.}
 
-\item{preference_ethnicity}{A numeric vector of length \code{n_resident} with
-values in \verb{[0, 1]} giving each resident's preference weight for ethnic
+\item{preference_ethnicity}{A numeric vector of length \code{n_resident},
+giving each resident's preference weight for ethnic
 similarity in neighbors. Default is \code{0.5} for all residents.}
 
 \item{SES}{A numeric vector of length \code{n_resident} giving each
-resident's socioeconomic status. Must be non-negative.}
+resident's socioeconomic status. Must be between 0 and 5.}
 
-\item{preference_SES}{A numeric vector of length \code{n_resident} with
-values in \verb{[0, 1]} giving each resident's preference weight for SES
+\item{preference_SES}{A numeric vector of length \code{n_resident},
+giving each resident's preference weight for SES
 similarity in neighbors. Default is \code{0.5} for all residents.}
 }
 \value{

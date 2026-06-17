@@ -1,3 +1,6 @@
+# addin.LiangSeg  1.1.0 (2025-06-17)
+Bug fixed: seg_segGame
+
 # addin.LiangSeg 1.0.0 (2025-06-01)
 Completed the whole function building. Still needs testing each function throughly.
 

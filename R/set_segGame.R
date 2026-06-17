@@ -594,10 +594,8 @@ set_segGame <- function(
   # city with residents' attribute --------------
   plot_city <- function(time = NULL, show = "ethnicity"){
     if(is.null(time)){
-      # reconstruct city by chosen attribute
       house_attr <- rep(NA, self$settings$cell_n)
       if(show == "ethnicity"){
-        # note: +1 = minority & -1 = majority
         house_attr[self$resident$house] <- self$resident$minority
         house_attr[house_attr==0] <- -1
       }else if(show == "SES"){
@@ -607,13 +605,9 @@ set_segGame <- function(
       }
       city <- array(house_attr, dim = c(self$settings$city_dim, self$settings$city_max_height))
     }else{
-      # message
       message("plotting the city of time ", time)
-      
-      # reconstruct city by chosen attribute
       house_attr <- rep(NA, self$settings$cell_n)
       if(show == "ethnicity"){
-        # note: +1 = minority & -1 = majority
         house_attr[self$log[[time]]$resident$house] <- self$log[[time]]$resident$minority
         house_attr[house_attr==0] <- -1
       }else if(show == "SES"){
@@ -630,22 +624,29 @@ set_segGame <- function(
     city_2D_df <- reshape2::melt(city_2D)
     
     # plot
-    p <- ggplot(data = city_2D_df) + geom_tile(aes(x = Var1, y = Var2, fill = value)) + 
+    # Var1 = Row index -> y-axis (scale_y_reverse: from upper to bottom）
+    # Var2 = column index -> x-axis（from left to right）
+    p <- ggplot(data = city_2D_df) + 
+      geom_tile(aes(x = Var2, y = Var1, fill = value)) + 
       scale_fill_gradient2(low  = "#00A0E9",
                            mid  = "white",
                            high = "#E60012",
                            midpoint = 0) + 
-      geom_vline(xintercept = seq(1.5, self$settings$city_dim[1], 1), size = .1,
-                 linetype = 'dashed', color = 'gray60') + 
-      geom_hline(yintercept = seq(1.5, self$settings$city_dim[2], 1), size = .1,
-                 linetype = 'dashed', color = 'gray60') +
-      geom_vline(xintercept = seq(self$settings$city_lot_dim[1] + 0.5, self$settings$city_dim[1], self$settings$city_lot_dim[1]),
+      geom_vline(xintercept = seq(1.5, self$settings$city_dim[2], 1),
+                 linewidth = .1, linetype = 'dashed', color = 'gray60') + 
+      geom_hline(yintercept = seq(1.5, self$settings$city_dim[1], 1),
+                 linewidth = .1, linetype = 'dashed', color = 'gray60') +
+      geom_vline(xintercept = seq(self$settings$city_lot_dim[2] + 0.5, 
+                                  self$settings$city_dim[2], 
+                                  self$settings$city_lot_dim[2]),
                  linetype = 'solid', color = 'black') +
-      geom_hline(yintercept = seq(self$settings$city_lot_dim[2] + 0.5, self$settings$city_dim[2], self$settings$city_lot_dim[2]),
+      geom_hline(yintercept = seq(self$settings$city_lot_dim[1] + 0.5, 
+                                  self$settings$city_dim[1], 
+                                  self$settings$city_lot_dim[1]),
                  linetype = 'solid', color = 'black') + 
       labs(x = "", y = "", fill = show) + 
       scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
+      scale_y_reverse(expand = c(0, 0)) + 
       coord_fixed() + 
       theme(
         axis.ticks.x = element_blank(),
@@ -681,24 +682,27 @@ set_segGame <- function(
     # message
     message("Showing the landlords' aversion on ", show,".")
     
-    
     # plot
-    p <- ggplot(data = ownership_df, aes(x = Var1, y = Var2)) + 
+     p <- ggplot(data = ownership_df, aes(x = Var2, y = Var1)) + 
       geom_tile(aes(fill = fill)) + 
       geom_text(aes(label = landlord), color = "black") + 
       scale_fill_gradient2(low  = "white",
                            high = "#E60012") + 
-      geom_vline(xintercept = seq(1.5, self$settings$city_dim[1], 1), size = .1,
-                 linetype = 'dashed', color = 'gray60') + 
-      geom_hline(yintercept = seq(1.5, self$settings$city_dim[2], 1), size = .1,
-                 linetype = 'dashed', color = 'gray60') +
-      geom_vline(xintercept = seq(self$settings$city_lot_dim[1] + 0.5, self$settings$city_dim[1], self$settings$city_lot_dim[1]),
+      geom_vline(xintercept = seq(1.5, self$settings$city_dim[2], 1),
+                 linewidth = .1, linetype = 'dashed', color = 'gray60') + 
+      geom_hline(yintercept = seq(1.5, self$settings$city_dim[1], 1),
+                 linewidth = .1, linetype = 'dashed', color = 'gray60') +
+      geom_vline(xintercept = seq(self$settings$city_lot_dim[2] + 0.5, 
+                                  self$settings$city_dim[2], 
+                                  self$settings$city_lot_dim[2]),
                  linetype = 'solid', color = 'black') +
-      geom_hline(yintercept = seq(self$settings$city_lot_dim[2] + 0.5, self$settings$city_dim[2], self$settings$city_lot_dim[2]),
+      geom_hline(yintercept = seq(self$settings$city_lot_dim[1] + 0.5, 
+                                  self$settings$city_dim[1], 
+                                  self$settings$city_lot_dim[1]),
                  linetype = 'solid', color = 'black') + 
       labs(x = "", y = "", fill = "aversion") + 
       scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
+      scale_y_reverse(expand = c(0, 0)) +
       coord_fixed() + 
       theme(
         axis.ticks.x = element_blank(),
@@ -974,6 +978,9 @@ set_segGame <- function(
       candid_house  <- rABM::sample_weighted(score2, size = 1)
       current_house <- self$resident$house[resid_ID]
       
+      # go NEXT if current_house is selected
+      if(candid_house == current_house) next
+      
       #----------------------------------------------
       # Step 2: landlord decides whether to decline
       # (skipped if include_landlord = FALSE: resident always moves)
@@ -1013,18 +1020,18 @@ set_segGame <- function(
         prob     <- 1 / (1 + exp(-house_score))
         prob_mat <- matrix(c(1 - prob, prob), nrow = 1)
         decision <- rABM::sample_weighted(prob_mat, size = 1) - 1
-        # decision: 0 = declined, 1 = accepted
+        # decision: 1 = declined, 0 = accepted
         
       }else{
         # landlord screening skipped: resident always accepted
-        decision <- 1L
+        decision <- 0L
       }
       
       #----------------------------------------------
       # Step 3: move if accepted
       #----------------------------------------------
       
-      if(decision == 1){
+      if(decision == 0){
         self$resident[resid_ID, "house"] <- candid_house
       }
       
@@ -1058,7 +1065,8 @@ set_segGame <- function(
   report_segregation <- function(level = c("city", "landlord"), 
                                  show = c("ethnicity", "SES"),
                                  index = c("D","M","H"),
-                                 log = NULL){
+                                 log = NULL,
+                                 plot = TRUE){
     # match arg
     level <- match.arg(level)
     show  <- match.arg(show)
@@ -1112,10 +1120,12 @@ set_segGame <- function(
       }
       
       # plot
-      plot_df <- data.frame(time = time_list, ind = ind)
-      p <- ggplot(data = plot_df) + geom_line(aes(x = time, y = ind), linewidth = 1) + 
-        theme_bw() + xlab("time") + ylab(paste0(index, "-index")) + ylim(c(0,1))
-      print(p)
+      if(isTRUE(plot)){
+        plot_df <- data.frame(time = time_list, ind = ind)
+        p <- ggplot(data = plot_df) + geom_line(aes(x = time, y = ind), linewidth = 1) + 
+          theme_bw() + xlab("time") + ylab(paste0(index, "-index")) + ylim(c(0,1))
+        print(p)
+      }
       
       # return
       cat(paste0("Reporting ", index, "-index at '", level, "' level on '", show, "'.", "\n"))

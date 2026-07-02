@@ -1,6 +1,6 @@
 Package: addin.LiangSeg
 Title: Addin to the package rABM for Hao Liang's Segregation by Landlords model
-Version: 1.3.0
+Version: 1.3.1
 Authors@R: 
     person("Keiichi", "Satoh", , "keiichi.satoh@r.hit-u.ac.jp", role = c("aut", "cre"))
 Description: This addin requires KeiichiSatoh/rABM from github to run.
@@ -14,7 +14,8 @@ Imports:
     reshape2,
     ggplot2,
     MASS,
-    segregation
+    segregation,
+    pbivnorm
 Suggests: 
     testthat (>= 3.0.0)
 Remotes:

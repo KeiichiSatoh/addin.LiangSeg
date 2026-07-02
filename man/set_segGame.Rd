@@ -35,7 +35,12 @@ set_segGame(
   default_resident_softmax_beta = 1,
   default_criteraia_landlord = c("intercept", "ethnicity", "SES"),
   default_block_eth_context = FALSE,
-  default_include_landlord_seq = TRUE
+  default_include_landlord_seq = TRUE,
+  sort_by_SES = FALSE,
+  convergence_tol = 0.05,
+  convergence_times = 10,
+  convergence_maxit = 500,
+  convergence_burnin = 100
 )
 }
 \arguments{
@@ -173,6 +178,36 @@ proportion modifies the landlord's decline probability. Default:
 landlord screening is skipped and all selected residents are always
 accepted. Useful for isolating the effect of resident preferences alone.
 Default: \code{TRUE}.}
+
+\item{sort_by_SES}{Logical. Default value of \code{sort_by_SES} in
+\code{select_resident()}, stored in \code{G$act_defaults}. If
+\code{TRUE}, the residents drawn for a given step are additionally
+re-ordered in descending order of SES (highest SES first) before being
+returned. This only affects processing order and is most relevant to
+\code{resident_move_seq()}, where residents are handled one at a time and
+later residents observe the updated positions of earlier ones. Default:
+\code{FALSE}.}
+
+\item{convergence_tol}{Positive numeric scalar. Convergence tolerance used
+by the built-in \code{Stop} function \code{converged()}. Convergence is
+declared once the range (maximum \eqn{-} minimum) of the most recent
+\code{convergence_times} values of the city-level ethnic dissimilarity
+index (D) falls below this tolerance. Default: \code{0.05}.}
+
+\item{convergence_times}{Positive integer. Number of most recent
+dissimilarity-index (D) values retained and checked by
+\code{converged()} when evaluating the convergence criterion. Default:
+\code{10}.}
+
+\item{convergence_maxit}{Positive integer. Maximum number of time steps.
+\code{converged()} returns \code{TRUE} once \code{self$time} reaches this
+value, regardless of whether the tolerance-based criterion has been met,
+ensuring the simulation always terminates. Default: \code{500}.}
+
+\item{convergence_burnin}{Non-negative integer. Number of initial time
+steps during which \code{converged()} always returns \code{FALSE},
+allowing the system to move away from its (typically random) initial
+configuration before convergence is evaluated. Default: \code{100}.}
 }
 \value{
 A \code{Game} object (R6 class) configured with the following
@@ -181,7 +216,8 @@ fields:
 \item{States}{
 \code{landlord}, \code{resident}, \code{resident_mat_ethnicity},
 \code{resident_mat_SES}, \code{house}, \code{house_neighbor_ind},
-\code{settings}, \code{record}, \code{act_defaults}
+\code{settings}, \code{record}, \code{act_defaults},
+\code{convergence}
 }
 \item{Active states}{
 \code{house_neib_ethnicity}, \code{house_neib_SES},
@@ -198,7 +234,11 @@ fields:
 \code{plot_city}, \code{plot_ownership}
 }
 \item{Report functions}{
-\code{report_segregation}, \code{report_landlord_stat}
+\code{report_segregation}, \code{report_landlord_stat},
+\code{report_result_df}
+}
+\item{Stop functions}{
+\code{converged}
 }
 }
 
@@ -206,14 +246,22 @@ The \code{settings} state contains the following named elements:
 \code{resident_n}, \code{landlord_n}, \code{house_n} (number of
 habitable units, i.e. cells with a landlord), \code{cell_n},
 \code{city_dim}, \code{city_zone_dim}, \code{city_lot_dim},
-\code{city_max_height}, \code{block_eth_eff}, \code{block_SES_eff}.
+\code{city_max_height}, \code{block_eth_eff}, \code{block_SES_eff},
+\code{convergence_tol}, \code{convergence_times},
+\code{convergence_maxit}, \code{convergence_D_prev} (initialised to
+\code{0}), and \code{convergence_burnin}.
 
-The \code{act_defaults} state stores the six default parameter values
+The \code{act_defaults} state stores the seven default parameter values
 listed above (\code{select_resident_prop}, \code{criteria_resident},
 \code{resident_softmax_beta}, \code{criteraia_landlord},
-\code{block_eth_context}, \code{include_landlord_seq}), and can be
-updated at run time to change the behaviour of Act functions without
-re-initialising the \code{Game} object.
+\code{block_eth_context}, \code{include_landlord_seq},
+\code{sort_by_SES}), and can be updated at run time to change the
+behaviour of Act functions without re-initialising the \code{Game}
+object.
+
+The \code{convergence} state stores \code{prev_D}, the trailing history
+(up to \code{convergence_times} values) of the city-level dissimilarity
+index (D) used internally by \code{converged()}.
 }
 \description{
 Constructs a fully configured \code{Game} object for simulating residential
@@ -237,12 +285,13 @@ random reordering) stays put.
 
 \strong{Sequential mode} (\code{plan = c("select_resident",
   "resident_move_seq")}):
-Selected residents are processed one at a time in random order. For each
-resident, the full cycle of (1) house choice, (2) landlord screening, and
-(3) movement is completed before the next resident is processed.
-Neighbourhood composition scores (Active states) are recomputed at each
-step, so later residents see the updated positions of earlier movers.
-Setting \code{include_landlord = FALSE} (or via
+Selected residents are processed one at a time in random order (unless
+\code{sort_by_SES = TRUE}, see below). For each resident, the full cycle
+of (1) house choice, (2) landlord screening, and (3) movement is
+completed before the next resident is processed. Neighbourhood
+composition scores (Active states) are recomputed at each step, so later
+residents see the updated positions of earlier movers. Setting
+\code{include_landlord = FALSE} (or via
 \code{default_include_landlord_seq}) disables landlord screening
 entirely, so every resident always moves to their chosen unit. This is
 useful for isolating the effect of residential preferences alone.
@@ -250,13 +299,18 @@ Both modes are theoretically equivalent when \code{include_landlord =
   TRUE} and can be used to verify convergence properties.
 }
 
-\subsection{City structure}{
-The city is a 3-D array of dimension
-\code{(city_zone_dim[1] * city_lot_dim[1],}
-\code{city_zone_dim[2] * city_lot_dim[2],}
-\code{city_max_height)}.
-Each cell represents one housing unit. Zones group lots for block-level
-analysis.
+\subsection{Selecting residents and processing order}{
+\code{select_resident()} draws \code{n} (or \code{prop} of) residents at
+random for the current step and stores their IDs in
+\code{self$record$selected_resident}. When \code{sort_by_SES = TRUE}
+(default stored in \code{act_defaults$sort_by_SES}), the drawn residents
+are additionally re-ordered in descending order of SES before being
+stored. This does not change \emph{which} residents are selected, only
+the order in which they are subsequently processed. The ordering has no
+effect under batch mode (all selected residents are evaluated
+simultaneously), but it does affect \code{resident_move_seq()}, where
+residents earlier in the queue move (and thereby reshape neighbourhood
+composition) before residents later in the queue make their choice.
 }
 
 \subsection{Resident score computation and softmax choice}{
@@ -311,6 +365,36 @@ Landlord screening can be disabled entirely in the sequential mode by
 setting \code{include_landlord = FALSE} in \code{resident_move_seq()},
 or by changing \code{G$act_defaults$include_landlord_seq} at run time.
 }
+
+\subsection{Convergence criterion}{
+The \code{Game} object is equipped with a \code{Stop} function,
+\code{converged()}, that can be used to terminate a simulation
+automatically (e.g. when \code{times} is left unspecified or set to a
+large upper bound in \code{run_Game()}). At each time step, it computes
+the city-level ethnic dissimilarity index (D) between minority and
+majority residents across blocks (\code{self$house$block}) and appends
+it to a trailing history capped at \code{convergence_times} values
+(stored in \code{self$convergence$prev_D}).
+
+\code{converged()} returns \code{FALSE} while \code{self$time} is less
+than or equal to \code{convergence_burnin}, allowing the system to move
+away from its initial (typically near-random) configuration. After the
+burn-in period, it returns \code{TRUE} as soon as either of the following
+holds:
+\enumerate{
+\item The D-index history contains at least \code{convergence_times}
+values and their range (maximum \eqn{-} minimum) is smaller than
+\code{convergence_tol}, indicating the segregation level has
+stabilised; or
+\item \code{self$time} has reached \code{convergence_maxit}, which
+guarantees the simulation terminates even if the tolerance-based
+criterion is never satisfied.
+}
+The relevant defaults (\code{convergence_tol}, \code{convergence_times},
+\code{convergence_maxit}, \code{convergence_burnin}) are stored in
+\code{G$settings} and can be modified after construction, e.g.
+\code{G$settings$convergence_tol <- 0.02}.
+}
 }
 \examples{
 \dontrun{
@@ -349,6 +433,19 @@ G_seq_noland <- run_Game(
   fields_to_save = G$notes$fields_to_save
 )
 
+# --- Sequential mode, processing residents in descending SES order ---
+G$act_defaults$sort_by_SES <- TRUE
+
+# --- Run until convergence (or convergence_maxit), using the built-in
+#     Stop function instead of a fixed number of steps ---
+G_conv <- set_segGame(convergence_tol = 0.02, convergence_burnin = 50)
+G_conv_out <- run_Game(
+  G_conv,
+  plan = c("select_resident", "resident_move_seq"),
+  stop = "converged",
+  fields_to_save = G_conv$notes$fields_to_save
+)
+
 # Visualise the city at the final time step
 G_batch$plot_city(time = 11)
 
@@ -358,6 +455,9 @@ G_batch$report_segregation(level = "city", show = "ethnicity",
 
 # Landlord-level descriptive statistics at current time
 G_batch$report_landlord_stat()
+
+# Flat resident/house/landlord data frame for the current time
+G_batch$report_result_df()
 
 # Plot landlord ownership and aversion map
 G_batch$plot_ownership(show = "ethnicity")

@@ -1,3 +1,15 @@
+# addin.LiangSeg  1.3.0 (2025-07-02)
+[changed] seg_segGame: 
+- Added `converged` as stop_FUN.
+- Added `report_result_df`
+
+# addin.LiangSeg  1.2.0 (2025-06-20)
+[changed] seg_segGame: 
+- Added `sort_by_SES` to act_default field.
+- added `sort_by_SES` option to `select_resident`.
+- deleted randomization from `resident_move_seq`.
+
+
 # addin.LiangSeg  1.1.0 (2025-06-17)
 Bug fixed: seg_segGame
 

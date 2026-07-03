@@ -1,3 +1,7 @@
+# addin.LiangSeg  1.4.0 (2025-07-03)
+[fixed] report_result_df: 
+- Included the `house_block` column.
+
 # addin.LiangSeg  1.3.1 (2025-07-02)
 [changed] Description: 
 - Added `pbivnorm` to Imports.

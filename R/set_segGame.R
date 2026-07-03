@@ -315,6 +315,220 @@
 #'   \code{G$settings$convergence_tol <- 0.02}.
 #' }
 #'
+#' \subsection{Plot functions in detail}{
+#'   Both plot functions read directly from \code{self} (i.e. the live
+#'   \code{Game} object's current state, or a single saved time point from
+#'   \code{self$log}), and are meant for quick visual diagnostics during
+#'   interactive exploration rather than for extracting numbers. Neither
+#'   function returns a usable value (both simply \code{print()} a
+#'   \pkg{ggplot2} object and return it invisibly via \code{print}); to get
+#'   the underlying \code{ggplot} object for further customisation (e.g.
+#'   adding \code{ggtitle()}, changing the colour scale, or faceting), copy
+#'   the function body out of \code{set_segGame()} and adapt it, or simply
+#'   reconstruct the input data frame (\code{city_2D_df} / \code{ownership_df})
+#'   yourself and call \code{ggplot()} on it directly.
+#'
+#'   \describe{
+#'     \item{\code{plot_city(time = NULL, show = "ethnicity")}}{
+#'       Draws a top-down map of the city grid, one tile per lot.
+#'       \itemize{
+#'         \item \strong{Data source (\code{time})}: if \code{time = NULL}
+#'           (default), the plot reflects the \emph{current} state of
+#'           \code{self$resident} (i.e. wherever the simulation currently
+#'           stands). If \code{time} is set to an integer, the plot instead
+#'           reads \code{self$log[[time]]$resident}, i.e. a snapshot saved by
+#'           \code{run_Game()}. This only works if \code{"resident"} was
+#'           included in \code{fields_to_save} when the simulation was run
+#'           (the default \code{G$notes$fields_to_save} already includes it),
+#'           and if \code{times} in \code{run_Game()} was left short enough,
+#'           or \code{log} indices requested, that the desired time point was
+#'           actually retained. This lets a researcher compare snapshots at
+#'           different points of the same run without re-simulating, e.g.
+#'           \code{G$plot_city(time = 1)} vs. \code{G$plot_city(time = 50)}.
+#'         \item \strong{Transformation (\code{show})}: with
+#'           \code{show = "ethnicity"} (default), each occupied lot is coded
+#'           \code{-1} (majority) or \code{+1} (minority); vacant/unowned
+#'           cells are \code{NA}. With \code{show = "SES"}, each occupied lot
+#'           is coded by the resident's raw SES value (\code{0}-\code{5}).
+#'           Because a lot can contain multiple floors
+#'           (\code{city_max_height} > 1), the function first builds a 3-D
+#'           array (rows \eqn{\times} columns \eqn{\times} floors) and then
+#'           collapses it to 2-D by taking the \strong{mean across floors}
+#'           (\code{NA}s removed), so what is plotted is, technically, the
+#'           average ethnicity code or average SES of the floors within each
+#'           lot, not a single resident's value. \code{NaN} results (i.e. a
+#'           lot entirely vacant/unowned) are recoded to \code{0} before
+#'           plotting.
+#'         \item \strong{Colour scale}: a diverging red-white-blue gradient
+#'           centred at \code{0} (\code{scale_fill_gradient2()}). For
+#'           \code{show = "ethnicity"} this cleanly separates
+#'           majority-dominated lots (blue, negative) from
+#'           minority-dominated lots (red, positive), with mixed/vacant lots
+#'           near white. For \code{show = "SES"} the midpoint of \code{0}
+#'           does not correspond to a meaningful "neutral" SES value (SES
+#'           ranges \code{0}-\code{5}), so the colour scale is less
+#'           informative for that case and researchers who want a proper SES
+#'           gradient may prefer to rebuild the plot with
+#'           \code{scale_fill_gradient()} or \code{scale_fill_viridis_c()}
+#'           instead.
+#'         \item \strong{Overlaid grid lines}: dashed grey lines mark
+#'           individual lots; solid black lines mark zone boundaries, derived
+#'           from \code{self$settings$city_lot_dim} and
+#'           \code{self$settings$city_dim}. These will automatically adapt if
+#'           \code{city_zone_dim} / \code{city_lot_dim} are changed at
+#'           construction time.
+#'       }
+#'     }
+#'     \item{\code{plot_ownership(show = "ethnicity")}}{
+#'       Draws a map of landlord ownership footprints, with each tile
+#'       labelled by its owning landlord's ID.
+#'       \itemize{
+#'         \item Unlike \code{plot_city()}, this always uses only the
+#'           \strong{ground floor} (\code{city[,,1]}) as a proxy for
+#'           ownership across the lot, on the assumption that ownership does
+#'           not vary by floor; there is no \code{time} argument, so it
+#'           always reflects the \emph{current} \code{self$house$landlord}
+#'           assignment (there is no way to inspect ownership at a past log
+#'           point through this function as written).
+#'         \item \strong{Transformation (\code{show})}: with
+#'           \code{show = "ethnicity"} (default) each tile is coloured by
+#'           that landlord's \code{minority_aversion} value; with
+#'           \code{show = "SES"} it is coloured by \code{SES_aversion}. These
+#'           are the same aversion values used inside \code{landlord_decline()}
+#'           / \code{resident_move_seq()}, so this plot is a direct way to
+#'           see \emph{where} the more discriminatory landlords' portfolios
+#'           are concentrated in space (relevant to
+#'           \code{landlord_dispersed_prop} and \code{landlord_geo_theta}).
+#'         \item \strong{Colour scale}: a sequential white-to-red gradient
+#'           (\code{scale_fill_gradient2(low = "white", high = "#E60012")}),
+#'           i.e. darker red = more hostile landlord on the selected
+#'           dimension. If \code{landlord_hostile_input_type = "binary"} was
+#'           used at construction, this collapses to essentially two shades
+#'           (aversion \code{0} or \code{1}); with
+#'           \code{landlord_hostile_input_type = "numeric"} it shows a
+#'           continuous gradient of aversion.
+#'       }
+#'     }
+#'   }
+#' }
+#'
+#' \subsection{Report functions in detail}{
+#'   The three report functions differ from the plot functions in that they
+#'   return ordinary R objects (numeric scalars/vectors or data frames),
+#'   making them the natural entry point for exporting simulation output to
+#'   external statistical software or for building custom summaries/plots not
+#'   covered by \code{plot_city()} / \code{plot_ownership()}.
+#'
+#'   \describe{
+#'     \item{\code{report_segregation(level, show, index, log, plot)}}{
+#'       Computes an aggregate segregation index from the current
+#'       (\code{log = NULL}) or logged (\code{log = <vector of time indices>})
+#'       state of the city.
+#'       \itemize{
+#'         \item \strong{\code{level}}: \code{"city"} treats each
+#'           \code{self$house$block} as the unit across which segregation is
+#'           measured (i.e. how unevenly residents are sorted across
+#'           neighbourhoods/blocks); \code{"landlord"} instead treats each
+#'           landlord's portfolio as the unit (i.e. how unevenly residents
+#'           are sorted across landlords' holdings, which is closer to a
+#'           measure of \emph{landlord-driven} sorting).
+#'         \item \strong{\code{show}}: \code{"ethnicity"} uses
+#'           \code{resident$minority} as the group variable;
+#'           \code{"SES"} uses \code{resident$SES} (all 6 SES categories, not
+#'           collapsed).
+#'         \item \strong{\code{index}}: which segregation statistic to
+#'           compute via package \pkg{segregation}. \code{"D"} is the
+#'           dissimilarity index (\eqn{0}-\eqn{1}; share of one group that
+#'           would need to relocate to achieve even distribution — this is
+#'           the same statistic used internally by \code{converged()}, but
+#'           computed here on demand and configurable by \code{level}/
+#'           \code{show}). \code{"M"} is Theil's information-theoretic mutual
+#'           information index (\code{mutual_total()$est[1]}, unbounded
+#'           above, sensitive to the number of groups/units). \code{"H"} is
+#'           the associated normalised entropy index
+#'           (\code{mutual_total()$est[2]}, bounded in \eqn{[0, 1]}, and
+#'           generally the more comparable choice to \code{"D"} across
+#'           differently-sized runs).
+#'         \item \strong{\code{log}}: if \code{NULL} (default), a single
+#'           numeric value for the \emph{current} state is returned. If set
+#'           to a vector of saved time indices (e.g. \code{log = 1:50}), the
+#'           function instead loops over \code{self$log} at those indices via
+#'           \code{rABM::value_of()}, and returns a named numeric vector (one
+#'           value per requested time point, named by the actual logged
+#'           \code{time} value) — this requires that \code{"house"} and
+#'           \code{"resident"} were both included in \code{fields_to_save}
+#'           when the run was executed. This is the natural way to trace how
+#'           segregation evolves over the course of a run, e.g. to visually
+#'           confirm convergence or to compare trajectories across parameter
+#'           settings.
+#'         \item \strong{\code{plot}}: only takes effect when \code{log} is
+#'           supplied; if \code{TRUE} (default) a \pkg{ggplot2} line plot of
+#'           the index against time is drawn (y-axis fixed to \code{[0, 1]}
+#'           via \code{ylim()} — note this clipping is only strictly correct
+#'           for \code{index = "D"} or \code{"H"}; if you request
+#'           \code{index = "M"} and its values exceed 1, the plot will
+#'           silently clip them, so it is worth checking the returned numeric
+#'           vector directly in that case rather than relying on the plot
+#'           alone). Set \code{plot = FALSE} to suppress the figure and just
+#'           get the numbers back, e.g. for stitching multiple runs together
+#'           into a single custom \pkg{ggplot2}/\pkg{data.table} pipeline.
+#'       }
+#'     }
+#'     \item{\code{report_landlord_stat(log = NULL)}}{
+#'       Returns landlord-level descriptive statistics as a data frame with
+#'       one row per landlord (or, when \code{log} is supplied, one row per
+#'       landlord per requested time point, with an added \code{time}
+#'       column, stacked via \code{rbind}).
+#'       \itemize{
+#'         \item Columns beyond the landlord's own attributes
+#'           (\code{minority_aversion}, \code{SES_aversion}, etc.) are:
+#'           \code{vacancy} (proportion of that landlord's units currently
+#'           unoccupied), \code{minority_prop} (share of that landlord's
+#'           tenants who are minority residents, \code{NA} if the landlord
+#'           currently has no tenants), \code{SES_mean} and \code{SES_sd}
+#'           (mean/sd of tenant SES for that landlord).
+#'         \item \strong{\code{log}}: as with \code{report_segregation()},
+#'           \code{NULL} gives the current snapshot; a vector of saved time
+#'           indices gives a stacked panel data frame across time, suitable
+#'           directly for a fixed-effects or random-effects panel regression
+#'           (e.g. \code{plm}) of tenant composition on landlord aversion
+#'           traits or on \code{landlord_dispersed}/geographic variables,
+#'           analogous to the kind of panel set-up already used elsewhere in
+#'           this workflow. Requires \code{"house"}, \code{"resident"}, and
+#'           \code{"landlord"} to have been included in
+#'           \code{fields_to_save}.
+#'       }
+#'     }
+#'     \item{\code{report_result_df(time = NULL)}}{
+#'       Returns a single "flat" resident-level data frame — one row per
+#'       resident — with the resident's own attributes plus the attributes of
+#'       their currently-assigned house/block (\code{house_ID},
+#'       \code{house_block}) and landlord (\code{landlord_ID},
+#'       \code{landlord_minority_aversion}, \code{landlord_SES_aversion},
+#'       \code{landlord_dispersed}) already merged in.
+#'       \itemize{
+#'         \item \strong{\code{time}}: if \code{NULL} (default), uses the
+#'           live/current \code{self}. If set to an integer, temporarily
+#'           substitutes \code{self <- self$log[[time]]} before assembling
+#'           the data frame, i.e. it reconstructs the identical
+#'           multi-level (resident-in-house-in-landlord) data frame for any
+#'           single saved time point. Passing a \code{time} larger than
+#'           \code{length(self$log)} raises an explicit error rather than
+#'           returning \code{NULL}/an empty frame.
+#'         \item This is the function best suited for exporting a single
+#'           cross-section (or, by looping over several values of
+#'           \code{time} and \code{rbind()}-ing the results, a full panel) to
+#'           multilevel/hierarchical models (e.g. residents nested in
+#'           landlords, via \code{lme4::lmer()} or \code{lavaan}), since it
+#'           already carries the nesting structure (resident \eqn{\to} house
+#'           \eqn{\to} landlord) as merged columns rather than requiring the
+#'           researcher to join \code{self$resident}, \code{self$house}, and
+#'           \code{self$landlord} by hand.
+#'       }
+#'     }
+#'   }
+#' }
+#'
 #' @examples
 #' \dontrun{
 #' library(rABM)
@@ -1303,7 +1517,7 @@ set_segGame <- function(
     df3 <- cbind(df2[ ,2:6], house_ID = df2$house, house_block = df2$block, landlord_ID = df2$landlord)
     # further merge landlord
     df4 <- merge(df3, self$landlord, by.x = "landlord_ID", by.y = "ID", all.x = TRUE, sort = FALSE)
-    df5 <- data.frame(df4[ ,2:7],
+    df5 <- data.frame(df4[ ,2:8],
                       landlord_ID = df4$landlord_ID, 
                       landlord_minority_aversion = df4$minority_aversion,
                       landlord_SES_aversion = df4$SES_aversion,

@@ -1,3 +1,7 @@
+# addin.LiangSeg  1.5.0 (2025-07-04)
+[fixed] report_result_df: 
+- Included the `house_building` column.
+
 # addin.LiangSeg  1.4.0 (2025-07-03)
 [fixed] report_result_df: 
 - Included the `house_block` column.

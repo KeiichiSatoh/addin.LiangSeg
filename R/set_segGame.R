@@ -777,6 +777,21 @@ set_segGame <- function(
   house <- data.frame(ID = 1:prod(dim(city)),
                       block = as.vector(city),
                       landlord = as.vector(landlord_out$ownership))
+  
+  # attach the building ID
+  city_dim <- dim(city)
+  house_map <- array(house$ID, dim = city_dim)
+  building_map <- array(NA, dim = city_dim)
+  k <- 0
+  for(i in 1:city_dim[1]){for(j in 1:city_dim[2]){
+    k <- k + 1
+    building_map[i,j, ] <- k
+  }}
+  house <- data.frame(house,
+                      building = as.vector(building_map)) 
+  house$building[is.na(house$block)] <- NA
+
+  # house neighbor indices
   house_neighbor_ind <- neighbor_indices(city)
   add_field(G, State(house), State(house_neighbor_ind))
   
@@ -1514,10 +1529,10 @@ set_segGame <- function(
                      resident_preference_SES = df$preference_SES, 
                      house = df$house)
     df2 <- merge(df, self$house, by.x = "house", by.y = "ID", all.x = TRUE, sort = FALSE)
-    df3 <- cbind(df2[ ,2:6], house_ID = df2$house, house_block = df2$block, landlord_ID = df2$landlord)
+    df3 <- cbind(df2[ ,2:6], house_ID = df2$house, house_block = df2$block, house_building = df2$building, landlord_ID = df2$landlord)
     # further merge landlord
     df4 <- merge(df3, self$landlord, by.x = "landlord_ID", by.y = "ID", all.x = TRUE, sort = FALSE)
-    df5 <- data.frame(df4[ ,2:8],
+    df5 <- data.frame(df4[ ,2:9],
                       landlord_ID = df4$landlord_ID, 
                       landlord_minority_aversion = df4$minority_aversion,
                       landlord_SES_aversion = df4$SES_aversion,

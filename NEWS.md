@@ -1,3 +1,14 @@
+# addin.LiangSeg  1.6.0 (2025-07-13)
+[added] set_segGame: 
+- `block_eth_threshold` parrameter.
+- `landlord_change_para` parrameter.
+- `resident_ownership_prop` parrameter.
+- `separate_home_owners` parrameter.
+- `home_owner_selection_prop` parrameter.
+[added] modify_landlord_aversion function
+[revised] replaced the internal function within house_neib_SES and  house_neib_ethnicity
+to the one written by C++.
+
 # addin.LiangSeg  1.5.0 (2025-07-04)
 [fixed] report_result_df: 
 - Included the `house_building` column.

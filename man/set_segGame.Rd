@@ -18,29 +18,35 @@ set_segGame(
   resident_preference_ethnicity_mino = c(3, 1),
   resident_preference_SES_majo = c(5, 0),
   resident_preference_SES_mino = c(5, 0),
+  resident_ownership_prop = 0.5,
   landlord_hostile_input_type = c("binary", "numeric"),
   landlord_ethnic_hostile_prop = 0.5,
   landlord_SES_hostile_prop = 0.5,
   landlord_hostile_phi = 0.1,
   landlord_ethnic_aversion_rnorm = c(0.5, 0.1),
   landlord_SES_aversion_rnorm = c(0.5, 0.1),
+  landlord_numeric_type = c("rnorm", "rnorm"),
   landlord_aversion_cor = 0.1,
   landlord_dispersed_prop = 0.3,
   landlord_geo_difference = TRUE,
   landlord_geo_theta = 3,
   block_eth_eff = 0.1,
   block_SES_eff = 0.1,
+  block_eth_threshold = 0,
   default_select_resident_prop = 0.25,
   default_criteria_resident = c("intercept", "ethnicity", "SES"),
   default_resident_softmax_beta = 1,
-  default_criteraia_landlord = c("intercept", "ethnicity", "SES"),
+  default_criteria_landlord = c("intercept", "ethnicity", "SES"),
   default_block_eth_context = FALSE,
   default_include_landlord_seq = TRUE,
   sort_by_SES = FALSE,
   convergence_tol = 0.05,
   convergence_times = 10,
   convergence_maxit = 500,
-  convergence_burnin = 100
+  convergence_burnin = 100,
+  separate_home_owners = FALSE,
+  home_owner_selection_prop = 0.25,
+  landlord_change_para = 30
 )
 }
 \arguments{
@@ -143,6 +149,25 @@ proportion on landlord decline probability when
 \item{block_SES_eff}{Numeric scalar. Effect size of block-level SES
 composition (reserved for future use). Default: \code{0.1}.}
 
+\item{block_eth_threshold}{Numeric scalar. Minimum block-level minority
+proportion required for the block ethnic context effect to be applied.
+When \code{block_eth_context = TRUE} in \code{resident_move_seq()}, the
+minority proportion of the block containing the candidate house
+(\code{self$block_minority_prop[selected_block]}) is compared against
+this threshold; the penalty
+(\code{minority_prop * settings$block_eth_eff * (-12)}) is added to the
+landlord's decline score only when the block's minority proportion is at
+or above \code{block_eth_threshold}. Below the threshold, block-level
+context has no effect and only individual-level criteria
+(\code{criteria_landlord}) enter the decline score. Default \code{0}
+effectively applies the block effect unconditionally (matching prior
+behaviour). Note: this threshold is currently only applied in
+\code{resident_move_seq()} (sequential mode); \code{landlord_decline()}
+(batch mode) applies the block effect without a threshold gate whenever
+\code{block_eth_context = TRUE}. Stored in
+\code{G$act_defaults$block_eth_threshold} and can be modified after
+construction, e.g. \code{G$act_defaults$block_eth_threshold <- 0.3}.}
+
 \item{default_select_resident_prop}{Numeric scalar in \code{(0, 1]}.
 Default proportion of residents selected per step by
 \code{select_resident()}. Stored in \code{G$act_defaults} and used as
@@ -160,11 +185,11 @@ resident utility scores. Stored in \code{G$act_defaults} and used as the
 default argument value of \code{beta} in \code{resident_choose_house()}
 and \code{resident_move_seq()}. Default: \code{1}.}
 
-\item{default_criteraia_landlord}{Character vector. Default criteria used
+\item{default_criteria_landlord}{Character vector. Default criteria used
 by \code{landlord_decline()} and \code{resident_move_seq()} to determine
 which components enter the landlord decline score. Any subset of
 \code{c("intercept", "ethnicity", "SES")}. Note: the argument name
-contains a typo (\code{criteraia}) for backward compatibility. Default:
+contains a typo (\code{criteria}) for backward compatibility. Default:
 all three.}
 
 \item{default_block_eth_context}{Logical. Default value of
@@ -253,7 +278,7 @@ habitable units, i.e. cells with a landlord), \code{cell_n},
 
 The \code{act_defaults} state stores the seven default parameter values
 listed above (\code{select_resident_prop}, \code{criteria_resident},
-\code{resident_softmax_beta}, \code{criteraia_landlord},
+\code{resident_softmax_beta}, \code{criteria_landlord},
 \code{block_eth_context}, \code{include_landlord_seq},
 \code{sort_by_SES}), and can be updated at run time to change the
 behaviour of Act functions without re-initialising the \code{Game}

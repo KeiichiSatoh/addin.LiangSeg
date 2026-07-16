@@ -10,6 +10,20 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// block_minority_prop_cpp
+NumericVector block_minority_prop_cpp(IntegerVector house_block, IntegerVector resident_house, IntegerVector resident_minority, int n_block);
+RcppExport SEXP _addin_LiangSeg_block_minority_prop_cpp(SEXP house_blockSEXP, SEXP resident_houseSEXP, SEXP resident_minoritySEXP, SEXP n_blockSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< IntegerVector >::type house_block(house_blockSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type resident_house(resident_houseSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type resident_minority(resident_minoritySEXP);
+    Rcpp::traits::input_parameter< int >::type n_block(n_blockSEXP);
+    rcpp_result_gen = Rcpp::wrap(block_minority_prop_cpp(house_block, resident_house, resident_minority, n_block));
+    return rcpp_result_gen;
+END_RCPP
+}
 // neib_ethnicity_prop
 NumericMatrix neib_ethnicity_prop(IntegerMatrix neib_ind, NumericVector house_minority);
 RcppExport SEXP _addin_LiangSeg_neib_ethnicity_prop(SEXP neib_indSEXP, SEXP house_minoritySEXP) {
@@ -36,6 +50,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_addin_LiangSeg_block_minority_prop_cpp", (DL_FUNC) &_addin_LiangSeg_block_minority_prop_cpp, 4},
     {"_addin_LiangSeg_neib_ethnicity_prop", (DL_FUNC) &_addin_LiangSeg_neib_ethnicity_prop, 2},
     {"_addin_LiangSeg_neib_SES_prop", (DL_FUNC) &_addin_LiangSeg_neib_SES_prop, 2},
     {NULL, NULL, 0}

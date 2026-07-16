@@ -184,6 +184,8 @@
 #'   \eqn{\approx} 39\% once \code{landlord_duration} reaches
 #'   \code{landlord_change_para}, and \eqn{\approx} 86\% once it reaches
 #'   \code{2 * landlord_change_para}. Default: \code{30} (time steps).
+#' @param use_linprop Whether to use linear probability transformation instead 
+#' of the softmax transformation (Defaults).
 #'
 #' @return A \code{Game} object (R6 class) configured with the following
 #'   fields:
@@ -955,12 +957,14 @@ set_segGame <- function(
                    landlord_n = landlord_n,
                    house_n = nrow(na.exclude(house)),
                    cell_n = prod(dim(city)),
+                   block_n = max(house$block, na.rm = TRUE), 
                    city_dim = city_dim,
                    city_zone_dim = city_zone_dim,
                    city_lot_dim  = city_lot_dim,
                    city_max_height = city_max_height,
                    block_eth_eff = block_eth_eff,
-                   block_SES_eff = block_SES_eff)
+                   block_SES_eff = block_SES_eff
+                   )
   add_field(G, State(settings))
   
   #--- record ---------------
@@ -1037,19 +1041,13 @@ set_segGame <- function(
   add_field(G, Active(house_intercept))
   
   #------- ethnic context by block ---------------------
-  
   block_minority_prop <- function(){
-    house <- data.frame(
-      block = self$house$block,
-      minority = 0
+    block_minority_prop_cpp(
+      house_block = self$house$block,
+      resident_house = self$resident$house,
+      resident_minority = self$resident$minority,
+      n_block = self$settings$block_n
     )
-    house$minority[self$resident$house] <- self$resident$minority
-    
-    # tabulate
-    minority_prop <- prop.table(table(house$block, house$minority), 1)[,"1"]
-    
-    # return
-    minority_prop
   }
   add_field(G, Active(block_minority_prop))
   

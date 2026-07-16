@@ -25,7 +25,6 @@ set_segGame(
   landlord_hostile_phi = 0.1,
   landlord_ethnic_aversion_rnorm = c(0.5, 0.1),
   landlord_SES_aversion_rnorm = c(0.5, 0.1),
-  landlord_numeric_type = c("rnorm", "rnorm"),
   landlord_aversion_cor = 0.1,
   landlord_dispersed_prop = 0.3,
   landlord_geo_difference = TRUE,
@@ -46,7 +45,8 @@ set_segGame(
   convergence_burnin = 100,
   separate_home_owners = FALSE,
   home_owner_selection_prop = 0.25,
-  landlord_change_para = 30
+  landlord_change_para = 30,
+  use_linprop = FALSE
 )
 }
 \arguments{
@@ -98,6 +98,13 @@ majority residents. Default: \code{c(5, 0)}.}
 \item{resident_preference_SES_mino}{Numeric vector of length 2
 \code{c(mean, sd)}. Same as above for minority residents.
 Default: \code{c(5, 0)}.}
+
+\item{resident_ownership_prop}{Numeric scalar in \code{[0, 1]}. Target
+proportion of residents who own their home
+(\code{resident$house_owning = 1}) versus rent (\code{= 0}), assigned
+independently of ethnicity and SES via \code{make_group_labels()}. Used
+by \code{select_resident()} when \code{separate_home_owners = TRUE} to
+stratify resident selection by ownership status. Default: \code{0.5}.}
 
 \item{landlord_hostile_input_type}{Character scalar, one of
 \code{"binary"} or \code{"numeric"}. Whether landlord aversion scores
@@ -188,9 +195,7 @@ and \code{resident_move_seq()}. Default: \code{1}.}
 \item{default_criteria_landlord}{Character vector. Default criteria used
 by \code{landlord_decline()} and \code{resident_move_seq()} to determine
 which components enter the landlord decline score. Any subset of
-\code{c("intercept", "ethnicity", "SES")}. Note: the argument name
-contains a typo (\code{criteria}) for backward compatibility. Default:
-all three.}
+\code{c("intercept", "ethnicity", "SES")}. Default: all three.}
 
 \item{default_block_eth_context}{Logical. Default value of
 \code{block_eth_context} in \code{landlord_decline()} and
@@ -233,6 +238,36 @@ ensuring the simulation always terminates. Default: \code{500}.}
 steps during which \code{converged()} always returns \code{FALSE},
 allowing the system to move away from its (typically random) initial
 configuration before convergence is evaluated. Default: \code{100}.}
+
+\item{separate_home_owners}{Logical. Default value of
+\code{separate_home_owners} in \code{select_resident()}, stored in
+\code{G$act_defaults}. If \code{TRUE}, the \code{n} residents selected
+each step are drawn separately from home owners
+(\code{resident$house_owning == 1}) and non-owners
+(\code{house_owning == 0}) in proportions controlled by
+\code{home_owner_selection_prop}, instead of being drawn as a single
+uniform sample from all residents. Default: \code{FALSE}.}
+
+\item{home_owner_selection_prop}{Numeric scalar in \code{[0, 1]}. When
+\code{separate_home_owners = TRUE} in \code{select_resident()}, the
+proportion of the \code{n} selected residents per step drawn from home
+owners; the remainder (\code{n - round(home_owner_selection_prop * n)})
+is drawn from non-owners. Has no effect when
+\code{separate_home_owners = FALSE}. Default: \code{0.25}.}
+
+\item{landlord_change_para}{Positive numeric scalar. Governs the landlord
+ownership-turnover hazard used by \code{landlord_change()}. For each
+house, the cumulative probability that its landlord changes is modelled
+as a Rayleigh distribution (a Weibull distribution with \code{shape = 2})
+over \code{house$landlord_duration}, implemented as
+\code{pweibull(landlord_duration, shape = 2, scale =
+  landlord_change_para * sqrt(2))}, with \code{landlord_change_para} acting
+as the Rayleigh scale parameter \eqn{\sigma}. Larger values make
+ownership more stable (the turnover probability rises more slowly with
+duration); as a rule of thumb, the cumulative change probability reaches
+\eqn{\approx} 39\\% once \code{landlord_duration} reaches
+\code{landlord_change_para}, and \eqn{\approx} 86\\% once it reaches
+\code{2 * landlord_change_para}. Default: \code{30} (time steps).}
 }
 \value{
 A \code{Game} object (R6 class) configured with the following
@@ -241,8 +276,10 @@ fields:
 \item{States}{
 \code{landlord}, \code{resident}, \code{resident_mat_ethnicity},
 \code{resident_mat_SES}, \code{house}, \code{house_neighbor_ind},
-\code{settings}, \code{record}, \code{act_defaults},
-\code{convergence}
+\code{house_neighbor_ind_0idx} (0-indexed, NA-as-\code{-1} version of
+\code{house_neighbor_ind} used internally by the Rcpp-backed
+neighbourhood-proportion helpers), \code{settings}, \code{record},
+\code{act_defaults}, \code{convergence}
 }
 \item{Active states}{
 \code{house_neib_ethnicity}, \code{house_neib_SES},
@@ -254,6 +291,9 @@ fields:
 }
 \item{Act functions (sequential update)}{
 \code{select_resident}, \code{resident_move_seq}
+}
+\item{Act functions (landlord turnover)}{
+\code{landlord_change}
 }
 \item{Plot functions}{
 \code{plot_city}, \code{plot_ownership}
@@ -267,6 +307,12 @@ fields:
 }
 }
 
+The \code{resident} state additionally includes a \code{house_owning}
+column (\code{1} = owner, \code{0} = renter; see
+\code{resident_ownership_prop}), and the \code{house} state includes a
+\code{landlord_duration} column (number of consecutive time steps the
+current landlord has held that house; see \code{landlord_change_para}).
+
 The \code{settings} state contains the following named elements:
 \code{resident_n}, \code{landlord_n}, \code{house_n} (number of
 habitable units, i.e. cells with a landlord), \code{cell_n},
@@ -276,12 +322,14 @@ habitable units, i.e. cells with a landlord), \code{cell_n},
 \code{convergence_maxit}, \code{convergence_D_prev} (initialised to
 \code{0}), and \code{convergence_burnin}.
 
-The \code{act_defaults} state stores the seven default parameter values
+The \code{act_defaults} state stores the eleven default parameter values
 listed above (\code{select_resident_prop}, \code{criteria_resident},
 \code{resident_softmax_beta}, \code{criteria_landlord},
 \code{block_eth_context}, \code{include_landlord_seq},
-\code{sort_by_SES}), and can be updated at run time to change the
-behaviour of Act functions without re-initialising the \code{Game}
+\code{sort_by_SES}, \code{block_eth_threshold},
+\code{separate_home_owners}, \code{home_owner_selection_prop},
+\code{landlord_change_para}), and can be updated at run time to change
+the behaviour of Act functions without re-initialising the \code{Game}
 object.
 
 The \code{convergence} state stores \code{prev_D}, the trailing history
@@ -292,7 +340,8 @@ index (D) used internally by \code{converged()}.
 Constructs a fully configured \code{Game} object for simulating residential
 segregation dynamics. The model includes residents, landlords, and a
 gridded city structure, and incorporates ethnic and socioeconomic
-preferences of residents and discriminatory behaviour of landlords.
+preferences of residents, discriminatory behaviour of landlords, and
+landlord ownership turnover over time.
 }
 \details{
 \subsection{Model overview}{
@@ -300,6 +349,8 @@ The model simulates residential sorting driven by two mechanisms:
 (1) residents' preferences for co-ethnic and same-SES neighbours, and
 (2) landlords' discriminatory screening of applicants by ethnicity and/or
 SES. Two update modes are provided: a batch mode and a sequential mode.
+Independently of these, landlord ownership itself can turn over over time
+via \code{landlord_change()} (see below).
 
 \strong{Batch mode} (\code{plan = c("select_resident",
   "resident_choose_house", "landlord_decline", "resident_move")}):
@@ -321,21 +372,36 @@ residents see the updated positions of earlier movers. Setting
 entirely, so every resident always moves to their chosen unit. This is
 useful for isolating the effect of residential preferences alone.
 Both modes are theoretically equivalent when \code{include_landlord =
-  TRUE} and can be used to verify convergence properties.
+  TRUE} and \code{block_eth_threshold = 0}, and can be used to verify
+convergence properties; see \code{block_eth_threshold} above for a case
+where the two modes currently diverge.
 }
 
 \subsection{Selecting residents and processing order}{
 \code{select_resident()} draws \code{n} (or \code{prop} of) residents at
 random for the current step and stores their IDs in
-\code{self$record$selected_resident}. When \code{sort_by_SES = TRUE}
-(default stored in \code{act_defaults$sort_by_SES}), the drawn residents
-are additionally re-ordered in descending order of SES before being
-stored. This does not change \emph{which} residents are selected, only
-the order in which they are subsequently processed. The ordering has no
-effect under batch mode (all selected residents are evaluated
-simultaneously), but it does affect \code{resident_move_seq()}, where
-residents earlier in the queue move (and thereby reshape neighbourhood
-composition) before residents later in the queue make their choice.
+\code{self$record$selected_resident}.
+
+When \code{separate_home_owners = TRUE} (default stored in
+\code{act_defaults$separate_home_owners}), the draw is stratified by
+\code{resident$house_owning}: a proportion \code{home_owner_selection_prop}
+of the \code{n} selected residents is drawn from home owners and the
+remainder from non-owners, then the combined set is shuffled. This is
+useful for scenarios where owners and renters should be represented in a
+fixed ratio each step regardless of their relative population sizes
+(e.g. to ensure owners — who may move less often in reality — are still
+adequately sampled). When \code{FALSE} (default), residents are drawn as
+a single uniform sample, ignoring ownership status.
+
+When \code{sort_by_SES = TRUE} (default stored in
+\code{act_defaults$sort_by_SES}), the drawn residents are additionally
+re-ordered in descending order of SES before being stored. This does not
+change \emph{which} residents are selected, only the order in which they
+are subsequently processed. The ordering has no effect under batch mode
+(all selected residents are evaluated simultaneously), but it does affect
+\code{resident_move_seq()}, where residents earlier in the queue move
+(and thereby reshape neighbourhood composition) before residents later in
+the queue make their choice.
 }
 
 \subsection{Resident score computation and softmax choice}{
@@ -366,6 +432,12 @@ which Gumbel-distributed unobserved heterogeneity yields softmax choice
 probabilities. After transformation, occupied units and units without a
 landlord are masked to zero; \code{rABM::sample_weighted()} re-normalises
 internally before sampling.
+
+Internally, \code{house_neib_ethnicity} and \code{house_neib_SES} compute
+neighbourhood composition proportions via the Rcpp helpers
+\code{neib_ethnicity_prop()} / \code{neib_SES_prop()} over
+\code{house_neighbor_ind_0idx}, then combine them with resident-level
+ethnicity/SES matrices via ordinary (BLAS-backed) matrix multiplication.
 }
 
 \subsection{Landlord decline model}{
@@ -386,9 +458,34 @@ criterion (\eqn{\beta_{\text{intercept}} = 1},
 approximately 0.7\\% remains, representing random ``capricious'' refusals
 by landlords irrespective of resident attributes.
 
+When \code{block_eth_context = TRUE}, a further penalty based on the
+block-level minority proportion is added to the score; see
+\code{block_eth_threshold} above for how this differs between the batch
+and sequential update modes.
+
 Landlord screening can be disabled entirely in the sequential mode by
 setting \code{include_landlord = FALSE} in \code{resident_move_seq()},
 or by changing \code{G$act_defaults$include_landlord_seq} at run time.
+}
+
+\subsection{Landlord ownership turnover}{
+Independently of resident movement, \code{landlord_change()} models
+landlords selling/losing their properties to a new, randomly drawn
+landlord (\code{rABM::sample2()} over \code{seq_len(landlord_n)}, with
+replacement, so the incoming landlord may coincide with the outgoing
+one). For each house, the probability that a change occurs this step is
+\code{pweibull(house$landlord_duration, shape = 2, scale =
+  landlord_change_para * sqrt(2))} — a Rayleigh hazard that starts at 0 for
+a freshly-acquired house and increases with tenure (see
+\code{landlord_change_para} above). Houses that change owners have
+\code{landlord_duration} reset to \code{1}; unchanged houses have it
+incremented by \code{1}. This Act function is independent of resident
+preferences and of \code{landlord_decline()}/\code{resident_move_seq()}'s
+discrimination model — it does not affect who lives where, only who owns
+which house and (via \code{landlord$minority_aversion}/\code{SES_aversion})
+with what discriminatory disposition. It is not included in either
+default \code{plan}; add \code{"landlord_change"} to the \code{plan}
+argument of \code{run_Game()} to enable turnover.
 }
 
 \subsection{Convergence criterion}{
@@ -495,7 +592,10 @@ ownership across the lot, on the assumption that ownership does
 not vary by floor; there is no \code{time} argument, so it
 always reflects the \emph{current} \code{self$house$landlord}
 assignment (there is no way to inspect ownership at a past log
-point through this function as written).
+point through this function as written, and — since
+\code{landlord_change()} mutates ownership over time if included
+in the \code{plan} — this plot reflects turnover as well as the
+original geographic assignment).
 \item \strong{Transformation (\code{show})}: with
 \code{show = "ethnicity"} (default) each tile is coloured by
 that landlord's \code{minority_aversion} value; with
@@ -607,11 +707,13 @@ this workflow. Requires \code{"house"}, \code{"resident"}, and
 }
 \item{\code{report_result_df(time = NULL)}}{
 Returns a single "flat" resident-level data frame — one row per
-resident — with the resident's own attributes plus the attributes of
-their currently-assigned house/block (\code{house_ID},
-\code{house_block}) and landlord (\code{landlord_ID},
-\code{landlord_minority_aversion}, \code{landlord_SES_aversion},
-\code{landlord_dispersed}) already merged in.
+resident — with the resident's own attributes (including
+\code{resident_owning}, i.e. \code{house_owning}) plus the attributes
+of their currently-assigned house/block (\code{house_ID},
+\code{house_block}, \code{landlord_duration}) and landlord
+(\code{landlord_ID}, \code{landlord_minority_aversion},
+\code{landlord_SES_aversion}, \code{landlord_dispersed}) already
+merged in.
 \itemize{
 \item \strong{\code{time}}: if \code{NULL} (default), uses the
 live/current \code{self}. If set to an integer, temporarily
@@ -674,6 +776,19 @@ G_seq_noland <- run_Game(
 
 # --- Sequential mode, processing residents in descending SES order ---
 G$act_defaults$sort_by_SES <- TRUE
+
+# --- Sequential mode with landlord ownership turnover each step ---
+G_turnover <- set_segGame(landlord_change_para = 20)
+G_turnover_out <- run_Game(
+  G_turnover,
+  plan = c("select_resident", "resident_move_seq", "landlord_change"),
+  times = 50,
+  fields_to_save = G_turnover$notes$fields_to_save
+)
+
+# --- Stratified resident selection by home-ownership status ---
+G_owners <- set_segGame(separate_home_owners = TRUE,
+                        home_owner_selection_prop = 0.5)
 
 # --- Run until convergence (or convergence_maxit), using the built-in
 #     Stop function instead of a fixed number of steps ---

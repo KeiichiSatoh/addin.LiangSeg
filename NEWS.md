@@ -1,3 +1,7 @@
+# addin.LiangSeg  1.7.1 (2025-07-14)
+[added] set_segGame: replaced `block_minority_prop` to cpp function. 
+
+
 # addin.LiangSeg  1.7.0 (2025-07-14)
 [added] set_segGame: included an option `use_linprop`. 
 

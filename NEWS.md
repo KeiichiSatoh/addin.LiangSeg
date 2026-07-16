@@ -1,3 +1,6 @@
+# addin.LiangSeg  1.7.0 (2025-07-14)
+[added] set_segGame: included an option `use_linprop`. 
+
 # addin.LiangSeg  1.6.0 (2025-07-13)
 [added] set_segGame: 
 - `block_eth_threshold` parrameter.

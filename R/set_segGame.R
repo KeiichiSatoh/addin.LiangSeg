@@ -781,7 +781,8 @@ set_segGame <- function(
     convergence_burnin = 100,
     separate_home_owners = FALSE,
     home_owner_selection_prop = 0.25,
-    landlord_change_para = 30
+    landlord_change_para = 30,
+    use_linprop = FALSE
     ){
   
   #==========================================
@@ -980,7 +981,8 @@ set_segGame <- function(
     block_eth_threshold = block_eth_threshold,
     separate_home_owners = separate_home_owners,
     home_owner_selection_prop = home_owner_selection_prop,
-    landlord_change_para = landlord_change_para
+    landlord_change_para = landlord_change_para,
+    use_linprop = use_linprop
     )
   add_field(G, State(act_defaults))
   
@@ -1447,7 +1449,11 @@ set_segGame <- function(
       #   beta -> 0 : near-random selection (bounded rationality)
       #   beta = 1  : standard probabilistic choice
       #   beta -> large : near-deterministic optimal choice (perfect rationality)
-      score2 <- rABM::prob_softmax(score, beta = beta)
+      if(self$act_defaults$use_linprop){
+        score2 <- rABM::prob_linprop(score)
+      }else{
+        score2 <- rABM::prob_softmax(score, beta = beta)
+      }
       
       # mask occupied houses (all residents except the current agent)
       other_residents <- self$resident$ID[self$resident$ID != resid_ID]

@@ -1,6 +1,10 @@
+# addin.LiangSeg  1.7.2 (2025-07-19)
+[added] set_segGame: revised the routine of calculating the house score of residents. 
+In the updated version, agents exclude those unavailable houses BEFORE calculating probability.
+The old version is available via `set_segGame_OLD`.
+
 # addin.LiangSeg  1.7.1 (2025-07-14)
 [added] set_segGame: replaced `block_minority_prop` to cpp function. 
-
 
 # addin.LiangSeg  1.7.0 (2025-07-14)
 [added] set_segGame: included an option `use_linprop`. 

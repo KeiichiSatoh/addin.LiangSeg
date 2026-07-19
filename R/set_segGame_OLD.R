@@ -131,7 +131,7 @@
 #'   \code{include_landlord} in \code{resident_move_seq()}. If \code{FALSE},
 #'   landlord screening is skipped and all selected residents are always
 #'   accepted. Useful for isolating the effect of resident preferences alone.
-#'   Default: \code{FALSE}.
+#'   Default: \code{TRUE}.
 #' @param sort_by_SES Logical. Default value of \code{sort_by_SES} in
 #'   \code{select_resident()}, stored in \code{G$act_defaults}. If
 #'   \code{TRUE}, the residents drawn for a given step are additionally
@@ -184,6 +184,8 @@
 #'   \eqn{\approx} 39\% once \code{landlord_duration} reaches
 #'   \code{landlord_change_para}, and \eqn{\approx} 86\% once it reaches
 #'   \code{2 * landlord_change_para}. Default: \code{30} (time steps).
+#' @param use_linprop Whether to use linear probability transformation instead 
+#' of the softmax transformation (Defaults).
 #'
 #' @return A \code{Game} object (R6 class) configured with the following
 #'   fields:
@@ -740,7 +742,7 @@
 #'
 #' @export
 
-set_segGame <- function(
+set_segGame_OLD <- function(
     city_zone_dim = c(3,3),
     city_lot_dim  = c(5,5),
     city_max_height = 3,
@@ -758,10 +760,10 @@ set_segGame <- function(
     landlord_hostile_input_type = c("binary", "numeric"),
     landlord_ethnic_hostile_prop = 0.5,     
     landlord_SES_hostile_prop = 0.5,
-    landlord_hostile_phi = 0,
+    landlord_hostile_phi = 0.1,
     landlord_ethnic_aversion_rnorm = c(0.5, 0.1),
     landlord_SES_aversion_rnorm = c(0.5, 0.1),
-    landlord_aversion_cor = 0,
+    landlord_aversion_cor = 0.1,
     landlord_dispersed_prop = 0.3,
     landlord_geo_difference = TRUE,
     landlord_geo_theta = 3,
@@ -773,7 +775,7 @@ set_segGame <- function(
     default_resident_softmax_beta = 1,
     default_criteria_landlord = c("intercept", "ethnicity", "SES"),
     default_block_eth_context = FALSE,
-    default_include_landlord_seq = FALSE,
+    default_include_landlord_seq = TRUE,
     sort_by_SES = FALSE,
     convergence_tol = 0.05,
     convergence_times = 10,
@@ -954,12 +956,14 @@ set_segGame <- function(
                    landlord_n = landlord_n,
                    house_n = nrow(na.exclude(house)),
                    cell_n = prod(dim(city)),
+                   block_n = max(house$block, na.rm = TRUE), 
                    city_dim = city_dim,
                    city_zone_dim = city_zone_dim,
                    city_lot_dim  = city_lot_dim,
                    city_max_height = city_max_height,
                    block_eth_eff = block_eth_eff,
-                   block_SES_eff = block_SES_eff)
+                   block_SES_eff = block_SES_eff
+                   )
   add_field(G, State(settings))
   
   #--- record ---------------
@@ -980,7 +984,8 @@ set_segGame <- function(
     block_eth_threshold = block_eth_threshold,
     separate_home_owners = separate_home_owners,
     home_owner_selection_prop = home_owner_selection_prop,
-    landlord_change_para = landlord_change_para
+    landlord_change_para = landlord_change_para,
+    use_linprop = use_linprop
     )
   add_field(G, State(act_defaults))
   
@@ -1035,19 +1040,13 @@ set_segGame <- function(
   add_field(G, Active(house_intercept))
   
   #------- ethnic context by block ---------------------
-  
   block_minority_prop <- function(){
-    house <- data.frame(
-      block = self$house$block,
-      minority = 0
+    block_minority_prop_cpp(
+      house_block = self$house$block,
+      resident_house = self$resident$house,
+      resident_minority = self$resident$minority,
+      n_block = self$settings$block_n
     )
-    house$minority[self$resident$house] <- self$resident$minority
-    
-    # tabulate
-    minority_prop <- prop.table(table(house$block, house$minority), 1)[,"1"]
-    
-    # return
-    minority_prop
   }
   add_field(G, Active(block_minority_prop))
   
@@ -1377,7 +1376,6 @@ set_segGame <- function(
   add_field(G, Act(resident_move))
   
   
-  #---- resident move seq ------------
   resident_move_seq <- function(criteria_resident = self$act_defaults$criteria_resident,
                                 criteria_landlord = self$act_defaults$criteria_landlord,
                                 block_eth_context = self$act_defaults$block_eth_context,
@@ -1411,11 +1409,8 @@ set_segGame <- function(
     )
     spec_land <- spec_land[spec_land$criterion %in% criteria_landlord, , drop = FALSE]
     
-    # get selected residents
+    # get selected residents and randomize order
     resid_IDs <- self$record$selected_resident
-    
-    # ループ不変：landlordがいないセルはこの関数内で固定
-    no_landlord_house <- which(is.na(self$house$landlord))
     
     # initialize record vectors for this step
     record_resident <- integer(length(resid_IDs))
@@ -1446,36 +1441,27 @@ set_segGame <- function(
       score <- Reduce(`+`, score_list)
       # score is a 1 x cell_n matrix here
       
-      # --- 候補となる家を先に絞り込む ------------------------------------
-      other_residents   <- self$resident$ID[self$resident$ID != resid_ID]
-      occupied_house      <- self$resident$house[other_residents]
-      unavailable_house   <- union(occupied_house, no_landlord_house)
-      
-      avail_mask <- rep(TRUE, self$settings$cell_n)
-      avail_mask[unavailable_house] <- FALSE
-      candid_house <- which(avail_mask)
-      
-      current_house <- self$resident$house[resid_ID]
-      
-      # 候補が1件もない場合は動けないので次の住民へ
-      if(length(candid_house) == 0){
-        next
-      }
-      
-      # --- 候補セルのみでスコアを変換し、softmaxの数値安定化を行う ----------
+      # softmax transformation
       # beta: inverse temperature parameter.
       #   beta -> 0 : near-random selection (bounded rationality)
       #   beta = 1  : standard probabilistic choice
       #   beta -> large : near-deterministic optimal choice (perfect rationality)
-      score_candid <- score[1, candid_house]
-      tx <- beta * score_candid
-      w_candid <- exp(tx - max(tx, na.rm = TRUE))  # max-shiftでオーバーフロー回避
+      score2 <- rABM::prob_softmax(score, beta = beta)
       
-      # weighted sample (候補内のみで正規化される; sample()が内部で処理)
-      candid_house_selected <- sample(candid_house, size = 1, prob = w_candid)
+      # mask occupied houses (all residents except the current agent)
+      other_residents <- self$resident$ID[self$resident$ID != resid_ID]
+      occupied_house  <- self$resident$house[other_residents]
+      score2[, occupied_house] <- 0
+      
+      # mask houses with no landlord
+      score2[, is.na(self$house$landlord)] <- 0
+      
+      # weighted sample (sample_weighted re-normalises internally)
+      candid_house  <- rABM::sample_weighted(score2, size = 1)
+      current_house <- self$resident$house[resid_ID]
       
       # go NEXT if current_house is selected
-      if(candid_house_selected == current_house) next
+      if(candid_house == current_house) next
       
       #----------------------------------------------
       # Step 2: landlord decides whether to decline
@@ -1490,7 +1476,7 @@ set_segGame <- function(
           resident_profile$SES <- 5 - resident_profile$SES
         }
         
-        relevant_landlord   <- self$house$landlord[candid_house_selected]
+        relevant_landlord   <- self$house$landlord[candid_house]
         landlord_preference <- self$landlord[relevant_landlord, spec_land$landlord_aversion, drop = FALSE]
         
         # calculate logit score
@@ -1506,7 +1492,7 @@ set_segGame <- function(
         # block ethnic context
         if(isTRUE(block_eth_context)){
           block_minority_prop <- self$block_minority_prop
-          selected_block      <- self$house$block[candid_house_selected]
+          selected_block      <- self$house$block[candid_house]
           minority_prop       <- block_minority_prop[selected_block]
           
           ## Block context come into effect only if it is over the threshold
@@ -1518,7 +1504,8 @@ set_segGame <- function(
         
         # probability of declining
         prob     <- 1 / (1 + exp(-house_score))
-        decision <- as.integer(runif(1) < prob)
+        prob_mat <- matrix(c(1 - prob, prob), nrow = 1)
+        decision <- rABM::sample_weighted(prob_mat, size = 1) - 1
         # decision: 1 = declined, 0 = accepted
         
       }else{
@@ -1531,13 +1518,13 @@ set_segGame <- function(
       #----------------------------------------------
       
       if(decision == 0){
-        self$resident[resid_ID, "house"] <- candid_house_selected
+        self$resident[resid_ID, "house"] <- candid_house
       }
       
       # record
       record_resident[i] <- resid_ID
       record_current[i]  <- current_house
-      record_candid[i]   <- candid_house_selected
+      record_candid[i]   <- candid_house
       record_decision[i] <- decision
     }
     
